@@ -1,0 +1,79 @@
+trigger:
+  branches:
+    include:
+    - main
+  paths:
+    include:
+      - app/**
+    exclude:
+      - infra/**
+
+pool:
+  name: Azure Pipelines
+
+parameters:
+  - name: containerRegistry
+    type: string
+    default: "gen1acrspringbootreact.azurecr.io"
+  - name: repository
+    type: string
+    default: "springboot-react"
+  - name: imageTag
+    default: latest
+  - name: appName
+    default: "gen1-lwapp-springboot-react"
+  - name: resourceGroup
+    default: "rg-springboot-react-project"
+  - name: workingDirectory
+    type: string
+    default: "./app"  
+
+
+variables:
+  - group: "terraform-azure-devops"
+
+stages:
+- stage : buildAndDeploy
+  jobs:
+  - job: build
+    displayName: "Build and Deploy"
+    steps:
+      - script: |
+          echo "Making script executable"
+          chmod +x ./mvnw
+
+          echo "Running script"
+          ./mvnw clean verify
+        displayName: "Build and test maven app"
+        workingDirectory: ${{parameters.workingDirectory}}
+    
+      - script: |
+          az login --service-principal \
+          --username $(clientId) \
+          --password $(clientSecret) \
+          --tenant $(tenantId)
+          az account show
+          az acr login --name ${{parameters.containerRegistry}}
+        displayName: "Azure CLI Login"
+
+      - script: |
+          docker build -t ${{parameters.containerRegistry}}/${{parameters.repository}}:${{parameters.imageTag}} .
+          docker push ${{parameters.containerRegistry}}/${{parameters.repository}}:${{parameters.imageTag}}
+        displayName: "Build and Push Docker Image"
+        workingDirectory: ${{parameters.workingDirectory}}
+
+      - script: |
+          echo "Scanning Docker image for vulnerabilities using Trivy..."
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image \
+          ${{parameters.containerRegistry}}/${{parameters.repository}}:${{parameters.imageTag}}
+        displayName: "Trivy Image Scan"
+        workingDirectory: ${{parameters.workingDirectory}}
+
+      - script: |
+          az webapp config container set \
+            --name ${{parameters.appName}} \
+            --resource-group ${{parameters.resourceGroup}} \
+            --container-image-name ${{parameters.containerRegistry}}/${{parameters.repository}}:${{parameters.imageTag}} \
+            --container-registry-url https://${{parameters.containerRegistry}}
+        displayName: "Deploy Docker Image"
+        workingDirectory: ${{parameters.workingDirectory}}

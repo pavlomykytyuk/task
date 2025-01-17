@@ -37,7 +37,7 @@ Create a New Project: Click on “New Project,” provide a name for your projec
 
 Create Pipelines:
 Navigate to Pipelines > Pipelines and click on "New Pipeline".
-Using YAML files in folder `task3/.azuredevops` create new variables
+Using YAML files in folder `task3/.azuredevops` create new pipelines
 
 Create a new variables group:
 Using service principal details add variables into a group named `terraform-azure-devops`
